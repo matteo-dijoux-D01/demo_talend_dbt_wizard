@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: ETL_LoadFxRates
+  Purpose: Loads the daily FX rate feed, standardizes currency codes and
+  date format, and fills gaps with the last known rate when a currency is
+  missing from a given day's feed (legacy fallback behavior kept as-is).
+  Legacy owner: data-engineering
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="j.dupont" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="ETL_LoadFxRates" majorVersion="0" minorVersion="1">
+
+  <node componentName="tFileInputDelimited" posX="64" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tFileInputDelimited_fx"/>
+    <elementParameter field="TEXT" name="FILENAME" value="&quot;/data/inbound/fx/daily_fx_rates.csv&quot;"/>
+    <elementParameter field="TABLE" name="SCHEMA">
+      <elementValue elementRef="CURRENCY_CODE" value="String"/>
+      <elementValue elementRef="RATE_DATE" value="String"/>
+      <elementValue elementRef="RATE_TO_USD" value="BigDecimal"/>
+    </elementParameter>
+  </node>
+
+  <node componentName="tDBInput" posX="64" posY="260" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_last_known_rate"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT currency_code, rate_to_usd AS last_rate FROM ref_fx_rate_current&quot;"/>
+  </node>
+
+  <node componentName="tMap" posX="320" posY="180" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_standardize_fx"/>
+    <elementParameter field="MEMO_VAR" name="out.CURRENCY_CODE" value="row1.CURRENCY_CODE.toUpperCase()"/>
+    <elementParameter field="MEMO_VAR" name="out.RATE_DATE"
+      value="TalendDate.parseDate(&quot;yyyyMMdd&quot;, row1.RATE_DATE)"/>
+    <!-- fallback: if the feed has no rate for this currency today, reuse the
+         last known rate instead of dropping the row -->
+    <elementParameter field="MEMO_VAR" name="out.RATE_TO_USD"
+      value="row1.RATE_TO_USD!=null ? row1.RATE_TO_USD : last_known_rate.last_rate"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="600" posY="180" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_fx"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;ref_fx_rate_current&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="UPDATE_OR_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tFileInputDelimited_fx" target="tMap_standardize_fx"/>
+  <connection connectorName="FLOW" label="last_known_rate" source="tDBInput_last_known_rate" target="tMap_standardize_fx"/>
+  <connection connectorName="FLOW" label="out" source="tMap_standardize_fx" target="tDBOutput_fx"/>
+
+</talendfile:ProcessType>

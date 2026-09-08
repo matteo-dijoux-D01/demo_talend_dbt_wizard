@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: INV_RunReorder
+  Purpose: Compares current inventory snapshot against configured reorder
+  thresholds and target stock levels, and produces reorder recommendations
+  for any SKU/warehouse below threshold.
+  Legacy owner: inventory
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="a.nguyen" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="INV_RunReorder" majorVersion="0" minorVersion="1">
+
+  <node componentName="tDBInput" posX="64" posY="112" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_snapshot"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT warehouse_id, product_sku, on_hand_qty FROM rpt_inventory_snapshot&quot;"/>
+  </node>
+
+  <node componentName="tDBInput" posX="64" posY="240" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_config"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT product_sku, reorder_threshold, target_stock FROM config_param&quot;"/>
+  </node>
+
+  <node componentName="tMap" posX="320" posY="176" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_compute_reorder"/>
+    <elementParameter field="MEMO_VAR" name="out.REORDER_QTY"
+      value="row1.on_hand_qty &lt; config.reorder_threshold ? (config.target_stock - row1.on_hand_qty) : 0"/>
+  </node>
+
+  <node componentName="tFilterRow" posX="560" posY="176" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tFilterRow_needs_reorder"/>
+    <elementParameter field="TEXT" name="CONDITION" value="REORDER_QTY &gt; 0"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="800" posY="176" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_reorder"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;rpt_reorder_recommendations&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="TRUNCATE_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tDBInput_snapshot" target="tMap_compute_reorder"/>
+  <connection connectorName="FLOW" label="config" source="tDBInput_config" target="tMap_compute_reorder"/>
+  <connection connectorName="FLOW" label="out" source="tMap_compute_reorder" target="tFilterRow_needs_reorder"/>
+  <connection connectorName="FLOW" label="filtered" source="tFilterRow_needs_reorder" target="tDBOutput_reorder"/>
+
+</talendfile:ProcessType>

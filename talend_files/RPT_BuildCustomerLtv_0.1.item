@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: RPT_BuildCustomerLtv
+  Purpose: Computes lifetime spend per customer, normalized to USD using
+  the current FX rate table, with a fallback to a rate of 1.0 when a
+  currency has no FX rate on file (kept from the legacy behavior).
+  Legacy owner: reporting
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="m.leroy" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="RPT_BuildCustomerLtv" majorVersion="0" minorVersion="1">
+
+  <node componentName="tDBInput" posX="64" posY="112" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_order_lines"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT customer_id, currency, line_total FROM fact_order_lines&quot;"/>
+  </node>
+
+  <node componentName="tDBInput" posX="64" posY="240" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_fx"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT currency_code, rate_to_usd FROM ref_fx_rate_current&quot;"/>
+  </node>
+
+  <node componentName="tMap" posX="320" posY="176" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_normalize_usd"/>
+    <elementParameter field="MEMO_VAR" name="out.CUSTOMER_ID" value="row1.customer_id"/>
+    <!-- fallback: unknown currency defaults to a 1.0 rate rather than
+         dropping the row -->
+    <elementParameter field="MEMO_VAR" name="out.SPEND_USD"
+      value="fx.rate_to_usd!=null ? row1.line_total * fx.rate_to_usd : row1.line_total * 1.0"/>
+  </node>
+
+  <node componentName="tAggregateRow" posX="560" posY="176" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tAggregateRow_ltv"/>
+    <elementParameter field="TEXT" name="GROUP_BY" value="CUSTOMER_ID"/>
+    <elementParameter field="TEXT" name="OPERATIONS" value="sum(SPEND_USD) AS lifetime_spend_usd"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="800" posY="176" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_ltv"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;rpt_customer_ltv&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="TRUNCATE_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tDBInput_order_lines" target="tMap_normalize_usd"/>
+  <connection connectorName="FLOW" label="fx" source="tDBInput_fx" target="tMap_normalize_usd"/>
+  <connection connectorName="FLOW" label="out" source="tMap_normalize_usd" target="tAggregateRow_ltv"/>
+  <connection connectorName="FLOW" label="row2" source="tAggregateRow_ltv" target="tDBOutput_ltv"/>
+
+</talendfile:ProcessType>
