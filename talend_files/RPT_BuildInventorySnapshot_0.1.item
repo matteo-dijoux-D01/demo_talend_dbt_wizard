@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: RPT_BuildInventorySnapshot
+  Purpose: Builds a point-in-time inventory snapshot per warehouse/SKU from
+  the stock movement feed.
+  Legacy owner: reporting
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="m.leroy" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="RPT_BuildInventorySnapshot" majorVersion="0" minorVersion="1">
+
+  <node componentName="tFileInputDelimited" posX="64" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tFileInputDelimited_stock"/>
+    <elementParameter field="TEXT" name="FILENAME" value="&quot;/data/inbound/inventory/stock_movements.csv&quot;"/>
+    <elementParameter field="TABLE" name="SCHEMA">
+      <elementValue elementRef="WAREHOUSE_ID" value="String"/>
+      <elementValue elementRef="PRODUCT_SKU" value="String"/>
+      <elementValue elementRef="MOVEMENT_QTY" value="Integer"/>
+      <elementValue elementRef="MOVEMENT_TYPE" value="String"/>
+    </elementParameter>
+  </node>
+
+  <node componentName="tMap" posX="320" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_signed_qty"/>
+    <elementParameter field="MEMO_VAR" name="out.SIGNED_QTY"
+      value="&quot;OUT&quot;.equals(row1.MOVEMENT_TYPE) ? -row1.MOVEMENT_QTY : row1.MOVEMENT_QTY"/>
+  </node>
+
+  <node componentName="tAggregateRow" posX="560" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tAggregateRow_on_hand"/>
+    <elementParameter field="TEXT" name="GROUP_BY" value="WAREHOUSE_ID, PRODUCT_SKU"/>
+    <elementParameter field="TEXT" name="OPERATIONS" value="sum(SIGNED_QTY) AS on_hand_qty"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="800" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_inventory_snapshot"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;rpt_inventory_snapshot&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="TRUNCATE_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tFileInputDelimited_stock" target="tMap_signed_qty"/>
+  <connection connectorName="FLOW" label="out" source="tMap_signed_qty" target="tAggregateRow_on_hand"/>
+  <connection connectorName="FLOW" label="row2" source="tAggregateRow_on_hand" target="tDBOutput_inventory_snapshot"/>
+
+</talendfile:ProcessType>

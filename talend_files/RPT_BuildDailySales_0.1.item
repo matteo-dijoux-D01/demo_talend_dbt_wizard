@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: RPT_BuildDailySales
+  Purpose: Aggregates fact_order_lines into a daily sales report by order
+  date, region, and product category. Rebuilt (truncate + reload) each run.
+  Legacy owner: reporting
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="m.leroy" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="RPT_BuildDailySales" majorVersion="0" minorVersion="1">
+
+  <node componentName="tDBInput" posX="64" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_order_lines"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT ol.order_date, c.region, p.category, ol.qty, ol.line_total FROM fact_order_lines ol JOIN dim_customer c ON c.customer_id = ol.customer_id JOIN dim_product p ON p.product_sku = ol.product_sku&quot;"/>
+  </node>
+
+  <node componentName="tAggregateRow" posX="320" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tAggregateRow_daily_sales"/>
+    <elementParameter field="TEXT" name="GROUP_BY" value="order_date, region, category"/>
+    <elementParameter field="TEXT" name="OPERATIONS"
+      value="sum(qty) AS total_units, sum(line_total) AS total_revenue"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="560" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_daily_sales"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;rpt_daily_sales&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="TRUNCATE_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tDBInput_order_lines" target="tAggregateRow_daily_sales"/>
+  <connection connectorName="FLOW" label="row2" source="tAggregateRow_daily_sales" target="tDBOutput_daily_sales"/>
+
+</talendfile:ProcessType>

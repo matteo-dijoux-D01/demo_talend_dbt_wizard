@@ -1,0 +1,12 @@
+customer_id,customer_name,region,is_active,updated_at
+C001,Alice Martin,emea,Y,2026-08-01
+C002, Bruno Costa ,LATAM,Y,2026-08-03
+C002,Bruno Costa,latam,Y,2026-08-10
+C003,Chen Wei,APAC,Y,2026-07-28
+C004,Dana Farouk,EMEA,N,2026-06-15
+C005,Elin Karlsson,emea,Y,2026-08-05
+C006,Farid Haddad,MENA,Y,2026-08-02
+C007,Grace Kim,apac,Y,2026-08-04
+C008,Hugo Silva,latam,Y,2026-08-06
+C009,Isla Byrne,EMEA,Y,2026-08-07
+C010,Jonas Weber,emea,N,2026-05-20
