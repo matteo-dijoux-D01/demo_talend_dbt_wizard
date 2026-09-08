@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: ETL_ImportRawOrders
+  Purpose: Nightly import of the raw order feed. Validates rows, enriches
+  order lines with customer/product reference data, splits valid order
+  lines from rejects, and writes final tables directly to the warehouse
+  (no intermediate staging layer).
+  Legacy owner: data-engineering
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="j.dupont" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="ETL_ImportRawOrders" majorVersion="0"
+    minorVersion="1" statusCode="">
+
+  <!-- ============ SOURCE: raw order feed (delimited file drop) ============ -->
+  <node componentName="tFileInputDelimited" posX="64" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tFileInputDelimited_1"/>
+    <elementParameter field="TEXT" name="FILENAME" value="&quot;/data/inbound/orders/raw_orders_feed.csv&quot;"/>
+    <elementParameter field="TABLE" name="SCHEMA">
+      <elementValue elementRef="ORDER_NO" value="String"/>
+      <elementValue elementRef="LINE_NO" value="Integer"/>
+      <elementValue elementRef="CUSTOMER_ID" value="String"/>
+      <elementValue elementRef="PRODUCT_SKU" value="String"/>
+      <elementValue elementRef="QTY" value="Integer"/>
+      <elementValue elementRef="UNIT_PRICE" value="BigDecimal"/>
+      <elementValue elementRef="CURRENCY" value="String"/>
+      <elementValue elementRef="ORDER_DATE" value="Date"/>
+      <elementValue elementRef="PROMO_CODE" value="String"/>
+    </elementParameter>
+  </node>
+
+  <!-- ============ LOOKUP: customer master ============ -->
+  <node componentName="tDBInput" posX="64" posY="272" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_customers"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT customer_id, customer_name, region, is_active FROM dim_customer&quot;"/>
+  </node>
+
+  <!-- ============ LOOKUP: product master ============ -->
+  <node componentName="tDBInput" posX="64" posY="400" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBInput_products"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="QUERY"
+      value="&quot;SELECT product_sku, product_name, unit_cost, category FROM dim_product&quot;"/>
+  </node>
+
+  <!-- ============ tMap: enrich + validate + split valid/reject ============ -->
+  <node componentName="tMap" posX="320" posY="200" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_enrich_validate"/>
+    <elementParameter field="TEXT" name="MAPPING_LOOKUP_INNER_JOIN_customers" value="false"/>
+    <elementParameter field="TEXT" name="MAPPING_LOOKUP_INNER_JOIN_products" value="false"/>
+    <!-- Reject condition: unknown customer, unknown product, qty <= 0, or
+         unit_price <= 0 routes the row to the REJECT flow below -->
+    <elementParameter field="MEMO_VAR" name="var.is_valid"
+      value="row1.CUSTOMER_ID!=null &amp;&amp; customers.customer_id!=null &amp;&amp; products.product_sku!=null &amp;&amp; row1.QTY&gt;0 &amp;&amp; row1.UNIT_PRICE&gt;0"/>
+    <elementParameter field="MEMO_VAR" name="out_valid.LINE_TOTAL" value="row1.QTY * row1.UNIT_PRICE"/>
+    <elementParameter field="MEMO_VAR" name="out_valid.CUSTOMER_NAME" value="customers.customer_name"/>
+    <elementParameter field="MEMO_VAR" name="out_valid.PRODUCT_NAME" value="products.product_name"/>
+    <elementParameter field="MEMO_VAR" name="out_reject.REJECT_REASON"
+      value="row1.QTY&lt;=0 ? &quot;invalid_qty&quot; : row1.UNIT_PRICE&lt;=0 ? &quot;invalid_price&quot; : customers.customer_id==null ? &quot;unknown_customer&quot; : &quot;unknown_product&quot;"/>
+  </node>
+
+  <!-- ============ OUTPUT: valid order lines -> fact table ============ -->
+  <node componentName="tDBOutput" posX="600" posY="112" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_order_lines"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;fact_order_lines&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="INSERT"/>
+  </node>
+
+  <!-- ============ OUTPUT: rejected rows -> reject table ============ -->
+  <node componentName="tDBOutput" posX="600" posY="280" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_order_rejects"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;order_import_rejects&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="INSERT"/>
+  </node>
+
+  <!-- ============ Wiring ============ -->
+  <connection connectorName="FLOW" label="row1" source="tFileInputDelimited_1" target="tMap_enrich_validate"/>
+  <connection connectorName="FLOW" label="customers" source="tDBInput_customers" target="tMap_enrich_validate"/>
+  <connection connectorName="FLOW" label="products" source="tDBInput_products" target="tMap_enrich_validate"/>
+  <connection connectorName="FLOW" label="out_valid" source="tMap_enrich_validate" target="tDBOutput_order_lines"/>
+  <connection connectorName="REJECT" label="out_reject" source="tMap_enrich_validate" target="tDBOutput_order_rejects"/>
+
+</talendfile:ProcessType>

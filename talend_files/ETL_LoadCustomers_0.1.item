@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: ETL_LoadCustomers
+  Purpose: Loads the customer master feed, trims/standardizes text fields,
+  keeps only the latest record per customer_id, and upserts into the
+  customer dimension table.
+  Legacy owner: data-engineering
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="j.dupont" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="ETL_LoadCustomers" majorVersion="0" minorVersion="1">
+
+  <node componentName="tFileInputDelimited" posX="64" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tFileInputDelimited_customers"/>
+    <elementParameter field="TEXT" name="FILENAME" value="&quot;/data/inbound/customers/customer_master.csv&quot;"/>
+    <elementParameter field="TABLE" name="SCHEMA">
+      <elementValue elementRef="CUSTOMER_ID" value="String"/>
+      <elementValue elementRef="CUSTOMER_NAME" value="String"/>
+      <elementValue elementRef="REGION" value="String"/>
+      <elementValue elementRef="IS_ACTIVE" value="String"/>
+      <elementValue elementRef="UPDATED_AT" value="Date"/>
+    </elementParameter>
+  </node>
+
+  <node componentName="tSortRow" posX="280" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tSortRow_by_updated_at"/>
+    <elementParameter field="TEXT" name="SORT_KEY" value="CUSTOMER_ID asc, UPDATED_AT desc"/>
+  </node>
+
+  <node componentName="tUniqRow" posX="440" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tUniqRow_latest_per_customer"/>
+    <elementParameter field="TEXT" name="UNIQUE_KEY" value="CUSTOMER_ID"/>
+    <!-- keeps the first row per CUSTOMER_ID after the desc sort above,
+         i.e. the most recently updated record -->
+  </node>
+
+  <node componentName="tMap" posX="600" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_standardize_customer"/>
+    <elementParameter field="MEMO_VAR" name="out.CUSTOMER_NAME" value="row1.CUSTOMER_NAME.trim()"/>
+    <elementParameter field="MEMO_VAR" name="out.REGION" value="row1.REGION.trim().toUpperCase()"/>
+    <elementParameter field="MEMO_VAR" name="out.IS_ACTIVE" value="&quot;Y&quot;.equals(row1.IS_ACTIVE) ? true : false"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="800" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_dim_customer"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;dim_customer&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="UPDATE_OR_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tFileInputDelimited_customers" target="tSortRow_by_updated_at"/>
+  <connection connectorName="FLOW" label="row2" source="tSortRow_by_updated_at" target="tUniqRow_latest_per_customer"/>
+  <connection connectorName="FLOW" label="row3" source="tUniqRow_latest_per_customer" target="tMap_standardize_customer"/>
+  <connection connectorName="FLOW" label="out" source="tMap_standardize_customer" target="tDBOutput_dim_customer"/>
+
+</talendfile:ProcessType>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: ETL_LoadProducts
+  Purpose: Loads the product master feed, standardizes category labels,
+  and upserts into the product dimension table.
+  Legacy owner: data-engineering
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="j.dupont" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="ETL_LoadProducts" majorVersion="0" minorVersion="1">
+
+  <node componentName="tFileInputDelimited" posX="64" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tFileInputDelimited_products"/>
+    <elementParameter field="TEXT" name="FILENAME" value="&quot;/data/inbound/products/product_master.csv&quot;"/>
+    <elementParameter field="TABLE" name="SCHEMA">
+      <elementValue elementRef="PRODUCT_SKU" value="String"/>
+      <elementValue elementRef="PRODUCT_NAME" value="String"/>
+      <elementValue elementRef="CATEGORY" value="String"/>
+      <elementValue elementRef="UNIT_COST" value="BigDecimal"/>
+    </elementParameter>
+  </node>
+
+  <node componentName="tMap" posX="320" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tMap_standardize_product"/>
+    <elementParameter field="MEMO_VAR" name="out.CATEGORY" value="row1.CATEGORY.trim().toUpperCase()"/>
+    <elementParameter field="MEMO_VAR" name="out.PRODUCT_NAME" value="row1.PRODUCT_NAME.trim()"/>
+  </node>
+
+  <node componentName="tDBOutput" posX="560" posY="128" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tDBOutput_dim_product"/>
+    <elementParameter field="TEXT" name="CONNECTION" value="conn_retail_dw"/>
+    <elementParameter field="TEXT" name="TABLE" value="&quot;dim_product&quot;"/>
+    <elementParameter field="TEXT" name="DATA_ACTION" value="UPDATE_OR_INSERT"/>
+  </node>
+
+  <connection connectorName="FLOW" label="row1" source="tFileInputDelimited_products" target="tMap_standardize_product"/>
+  <connection connectorName="FLOW" label="out" source="tMap_standardize_product" target="tDBOutput_dim_product"/>
+
+</talendfile:ProcessType>

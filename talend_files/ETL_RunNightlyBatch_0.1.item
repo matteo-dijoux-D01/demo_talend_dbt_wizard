@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Talend Job: ETL_RunNightlyBatch
+  Purpose: Nightly orchestration job. Runs the master-data loads, then the
+  order import, then the reporting builds, in sequence. This is the only
+  entry point scheduled in production (via the scheduler / cron trigger).
+  Legacy owner: data-engineering
+-->
+<talendfile:ProcessType xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:talendfile="http://www.talend.org/talendfile"
+    author="j.dupont" creationDate="1583020800000" defaultContext="Default"
+    jobType="STANDARD" label="ETL_RunNightlyBatch" majorVersion="0" minorVersion="1">
+
+  <node componentName="tPrejob" posX="40" posY="40" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tPrejob_1"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="120" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_load_customers"/>
+    <elementParameter field="TEXT" name="PROCESS" value="ETL_LoadCustomers"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="200" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_load_products"/>
+    <elementParameter field="TEXT" name="PROCESS" value="ETL_LoadProducts"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="280" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_load_fx"/>
+    <elementParameter field="TEXT" name="PROCESS" value="ETL_LoadFxRates"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="360" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_import_orders"/>
+    <elementParameter field="TEXT" name="PROCESS" value="ETL_ImportRawOrders"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="440" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_daily_sales"/>
+    <elementParameter field="TEXT" name="PROCESS" value="RPT_BuildDailySales"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="520" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_customer_ltv"/>
+    <elementParameter field="TEXT" name="PROCESS" value="RPT_BuildCustomerLtv"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="600" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_inventory_snapshot"/>
+    <elementParameter field="TEXT" name="PROCESS" value="RPT_BuildInventorySnapshot"/>
+  </node>
+
+  <node componentName="tRunJob" posX="40" posY="680" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tRunJob_reorder"/>
+    <elementParameter field="TEXT" name="PROCESS" value="INV_RunReorder"/>
+  </node>
+
+  <node componentName="tPostjob" posX="40" posY="760" componentVersion="0.102">
+    <elementParameter field="TEXT" name="UNIQUE_NAME" value="tPostjob_1"/>
+  </node>
+
+  <!-- sequential trigger chain: each subjob only runs if the previous one
+       completed successfully -->
+  <connection connectorName="COMPONENT_OK" source="tPrejob_1" target="tRunJob_load_customers"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_load_customers" target="tRunJob_load_products"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_load_products" target="tRunJob_load_fx"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_load_fx" target="tRunJob_import_orders"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_import_orders" target="tRunJob_daily_sales"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_daily_sales" target="tRunJob_customer_ltv"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_customer_ltv" target="tRunJob_inventory_snapshot"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_inventory_snapshot" target="tRunJob_reorder"/>
+  <connection connectorName="ON_SUBJOB_OK" source="tRunJob_reorder" target="tPostjob_1"/>
+
+</talendfile:ProcessType>
