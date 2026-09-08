@@ -3,7 +3,7 @@ config-version: 2
 name: "retail_analytics"
 version: "1.0.0"
 
-profile: matteo
+profile: "matteo"
 
 model-paths: ["models"]
 analysis-paths: ["analyses"]
